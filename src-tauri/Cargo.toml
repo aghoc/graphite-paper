@@ -1,0 +1,33 @@
+[package]
+name = "graphite-paper"
+version = "0.1.0"
+description = "Graphite 디자인의 논문 리더"
+license = "MIT"
+edition = "2024"
+rust-version = "1.85"
+
+[lib]
+name = "graphite_paper_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# protocol-asset: 로컬 이미지를 asset:// 프로토콜로 웹뷰에 노출
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# GFM(표·체크리스트·취소선·각주·자동 링크) + 수식($, $$) 파싱. syntect 등 무거운 기본 기능은 끔
+comrak = { version = "1", default-features = false }
+notify = "8"
+urlencoding = "2"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
