@@ -13,6 +13,9 @@
   <!-- 피클 스타일 테마 (토큰·부품 모양 덮어쓰기) -->
   <link rel="stylesheet" href="theme.css" />
   <script src="main.js" defer></script>
+  <script src="paper-ko.js" defer></script>
+  <script src="paper-extract.js" defer></script>
+  <script src="paper.js" defer></script>
 </head>
 <body>
   <div id="app" class="no-doc">
@@ -34,7 +37,12 @@
           <button id="seg-edit" type="button" role="tab" aria-selected="false">편집</button>
         </div>
         <button id="btn-save" class="t-btn t-btn--sm t-btn--primary save-btn" type="button">저장</button>
-        <button id="btn-search" class="t-box t-box--sm search-trigger" type="button" aria-label="문서에서 찾기">
+        <!-- 고정 버튼: 언제나 같은 자리. 쓸 수 없을 때는 흐리게 둔다 -->
+        <div class="tb-fixed">
+          <button id="btn-figure" class="t-iconbtn t-iconbtn--sm" type="button" title="영역 선택: PDF에서 그림·표·수식 영역을 드래그해 요청 선택" aria-label="영역 선택" aria-pressed="false"><svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m21 15-4.5-4.5a1.5 1.5 0 0 0-2.1 0L7 18"/></svg></button>
+          <button id="btn-roadmap" class="t-iconbtn t-iconbtn--sm" type="button" title="읽기 로드맵: 이 논문 앞뒤로 읽을 논문" aria-label="읽기 로드맵"><svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h8.5a3.5 3.5 0 0 0 0-7h-9a3.5 3.5 0 0 1 0-7H16"/></svg></button>
+          <button id="btn-arxiv" class="t-iconbtn t-iconbtn--sm" type="button" title="arxiv.org에서 보기" aria-label="arxiv.org에서 보기"><svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg></button>
+        <button id="btn-search" class="t-box t-box--sm search-trigger" type="button" aria-label="문서에서 찾기" title="찾기 (⌘F)">
           <svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
           <span class="search-trigger__label">찾기</span>
           <kbd class="kbd" data-mod>F</kbd>
@@ -60,43 +68,58 @@
             <button id="font-reset" class="t-btn t-btn--sm t-btn--grey font-pop__reset" type="button">기본 크기로 <kbd class="kbd" data-mod>0</kbd></button>
           </div>
         </div>
-        <button id="btn-open" class="t-iconbtn t-iconbtn--sm" type="button" title="파일 열기 (⌘O)" aria-label="파일 열기">
-          <svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        <button id="btn-link" class="t-iconbtn t-iconbtn--sm" type="button" title="링크로 열기 (⌘L)" aria-label="링크로 논문 열기">
+          <svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/></svg>
         </button>
+        <button id="btn-side" class="t-iconbtn t-iconbtn--sm" type="button" title="사이드 뷰: 번역·질문 (⌘J)" aria-label="사이드 뷰" aria-pressed="false">
+          <svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M15 4v16"/></svg>
+        </button>
+        </div>
       </div>
     </nav>
 
-    <!-- 사이드바 (문서 모드 .t-side, 236px): 파일 탐색기 / 목차 -->
+    <!-- 사이드바 (문서 모드 .t-side, 236px): 논문 서재 / 목차 -->
     <aside id="toc" class="t-side toc" aria-label="사이드바">
       <div id="side-tabs" class="t-seg t-seg--sm side-tabs" role="tablist" aria-label="사이드바 보기">
-        <button id="tab-files" type="button" role="tab" aria-selected="false" aria-controls="pane-files">파일</button>
-        <button id="tab-toc" type="button" role="tab" aria-selected="true" aria-controls="pane-toc">목차</button>
+        <button id="tab-papers" type="button" role="tab" aria-selected="true" aria-controls="pane-papers">논문</button>
+        <button id="tab-toc" type="button" role="tab" aria-selected="false" aria-controls="pane-toc">목차</button>
       </div>
 
-      <section id="pane-files" class="side-pane files" role="tabpanel" aria-labelledby="tab-files">
-        <div class="files-head">
-          <span id="files-root" class="files-root"></span>
-          <button id="btn-new-file" class="t-iconbtn t-iconbtn--sm" type="button" title="새 마크다운 파일 (⌘N)" aria-label="새 마크다운 파일">
-            <svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 11v6M9 14h6"/></svg>
-          </button>
-          <button id="btn-refresh" class="t-iconbtn t-iconbtn--sm" type="button" title="새로 고침" aria-label="파일 목록 새로 고침">
-            <svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg>
-          </button>
-          <button id="btn-folder" class="t-iconbtn t-iconbtn--sm" type="button" title="다른 폴더 열기 (⇧⌘O)" aria-label="다른 폴더 열기">
-            <svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      <section id="pane-papers" class="side-pane papers" role="tabpanel" aria-labelledby="tab-papers">
+        <div class="papers-actions">
+          <button id="btn-pdf" class="t-btn t-btn--sm t-btn--grey" type="button" title="PDF 파일 열기">PDF 열기</button>
+          <button id="btn-link-side" class="t-btn t-btn--sm t-btn--grey" type="button" title="arXiv 번호·논문 링크·DOI로 열기 (⌘L)">링크로 열기</button>
+        </div>
+        <nav class="papers-nav" aria-label="논문 찾기">
+          <button type="button" data-view="ai"><svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 13.9 9 19.5 11 13.9 13 12 18.5 10.1 13 4.5 11 10.1 9z"/></svg><span>AI로 논문 찾기</span></button>
+          <button type="button" data-view="search"><svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>arXiv 검색</span></button>
+        </nav>
+        <div class="papers-head">
+          <span class="t-side__label papers-label">서재</span>
+          <button id="btn-new-folder" class="t-iconbtn t-iconbtn--sm papers-head__add" type="button" title="새 폴더 만들기" aria-label="새 폴더 만들기">
+            <svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10v6M9 13h6"/></svg>
           </button>
         </div>
-        <div id="files-tree" class="files-tree" role="tree" aria-label="파일"></div>
-        <div class="files-empty">
-          <p>폴더를 열면 안에 있는 마크다운 파일을 여기서 바로 열 수 있어요</p>
-          <button id="btn-folder-empty" class="t-btn t-btn--sm t-btn--grey" type="button">폴더 열기</button>
-        </div>
+        <div id="papers-list" class="papers-list"></div>
+        <p id="papers-empty" class="papers-empty">PDF나 arXiv 링크로 연 논문이 여기에 모여요</p>
       </section>
 
       <section id="pane-toc" class="side-pane" role="tabpanel" aria-labelledby="tab-toc">
         <nav id="toc-list" class="t-side__group toc-list" aria-label="목차"></nav>
         <p class="toc-empty">제목이 없는 문서예요</p>
       </section>
+
+      <div class="side-foot">
+        <label class="side-chip lang-chip" title="번역 언어">
+          <svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.7 5.6 3.7 9s-1.2 6.4-3.7 9c-2.5-2.6-3.7-5.6-3.7-9S9.5 5.6 12 3z"/></svg>
+          <span id="lang-label">한국어</span>
+          <select id="lang-select" aria-label="번역 언어"></select>
+        </label>
+        <button id="btn-model" class="side-chip model-chip" type="button" title="모델 연결">
+          <span class="model-chip__ico"><span id="model-logo" class="model-logo"></span><span class="model-dot" aria-hidden="true"></span></span>
+          <span class="model-chip__text"><strong id="model-name">모델</strong><span id="model-provider"></span></span>
+        </button>
+      </div>
     </aside>
     <div id="toc-scrim" class="toc-scrim"></div>
 
@@ -105,24 +128,88 @@
       <section id="empty" class="empty">
         <div class="empty__inner">
           <img class="empty__logo" src="logo.png" alt="Graphite Paper" width="72" height="72" />
-          <h1 class="empty__title">마크다운 파일을<br />끌어다 놓으세요</h1>
-          <p class="empty__sub">파일이나 폴더를 직접 골라서 열 수도 있어요</p>
+          <h1 class="empty__title">논문 PDF를<br />끌어다 놓으세요</h1>
+          <p class="empty__sub">arXiv 번호나 논문 링크로 열거나, AI에게 읽을 논문을 찾아 달라고 할 수 있어요</p>
           <div class="empty__ctas">
-            <button id="btn-open-empty" class="t-btn t-btn--lg t-btn--primary empty__cta" type="button">파일 열기</button>
-            <button id="btn-folder-empty2" class="t-btn t-btn--lg t-btn--grey empty__cta" type="button">폴더 열기</button>
+            <button id="btn-open-empty" class="t-btn t-btn--lg t-btn--primary empty__cta" type="button">PDF 열기</button>
+            <button id="btn-link-empty" class="t-btn t-btn--lg t-btn--grey empty__cta" type="button">링크로 열기</button>
+          </div>
+          <div class="empty__more">
+            <button id="btn-ai-empty" class="t-btn t-btn--sm t-btn--weak" type="button">AI로 논문 찾기</button>
           </div>
           <dl class="shortcuts">
             <div><dt>파일 열기</dt><dd><kbd class="kbd" data-mod>O</kbd></dd></div>
-            <div><dt>보기 ↔ 편집</dt><dd><kbd class="kbd" data-mod>E</kbd></dd></div>
-            <div><dt>저장</dt><dd><kbd class="kbd" data-mod>S</kbd></dd></div>
+            <div><dt>링크로 열기</dt><dd><kbd class="kbd" data-mod>L</kbd></dd></div>
             <div><dt>찾기</dt><dd><kbd class="kbd" data-mod>F</kbd></dd></div>
-            <div><dt>새 파일</dt><dd><kbd class="kbd" data-mod>N</kbd></dd></div>
+            <div><dt>마크다운 편집</dt><dd><kbd class="kbd" data-mod>E</kbd></dd></div>
+            <div><dt>AI에게 질문</dt><dd><kbd class="kbd" data-mod>J</kbd></dd></div>
             <div><dt>폴더 열기</dt><dd><kbd class="kbd" data-mod>⇧O</kbd></dd></div>
             <div><dt>사이드바</dt><dd><kbd class="kbd" data-mod>\</kbd></dd></div>
             <div><dt>글자 크기</dt><dd><kbd class="kbd" data-mod>+ − 0</kbd></dd></div>
           </dl>
         </div>
       </section>
+
+      <!-- 모델을 쓸 수 없을 때 안내 -->
+      <div id="llm-notice" class="t-callout t-callout--warn llm-notice" role="status" hidden>
+        <div class="t-callout__body"><span id="llm-notice-text"></span> <button id="llm-notice-open" class="t-textlink" type="button">모델 설정 열기</button></div>
+      </div>
+
+      <!-- AI로 논문 찾기 -->
+      <section id="view-ai" class="pview pview--chat" aria-label="AI로 논문 찾기">
+        <div class="pview__in">
+          <div id="ai-mode" class="t-seg t-seg--sm ai-mode" role="tablist" aria-label="AI 검색">
+            <button type="button" role="tab" data-mode="search" aria-selected="true">논문 찾기</button>
+            <button type="button" role="tab" data-mode="roadmap" aria-selected="false">로드맵</button>
+          </div>
+          <div id="ai-log" class="chat-log"></div>
+        </div>
+        <form id="ai-form" class="chat-form">
+          <div class="chat-box">
+            <textarea id="ai-input" rows="1" spellcheck="false" aria-label="찾을 논문"></textarea>
+            <button id="ai-send" class="t-iconbtn t-iconbtn--sm t-iconbtn--fill chat-send" type="submit" aria-label="보내기"><svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+          </div>
+        </form>
+      </section>
+
+      <!-- arXiv 검색 -->
+      <section id="view-search" class="pview" aria-label="arXiv 검색">
+        <div class="pview__in">
+          <form id="arxiv-form" class="arxiv-form">
+            <label class="t-box t-box--lg">
+              <svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              <input id="arxiv-input" type="search" spellcheck="false" placeholder="검색어, arXiv 번호 또는 논문 링크" aria-label="arXiv 검색" />
+            </label>
+            <button class="t-btn t-btn--primary" type="submit">검색</button>
+          </form>
+          <p id="arxiv-summary" class="arxiv-summary"></p>
+          <div id="arxiv-results" class="hits"></div>
+          <div id="arxiv-wait" class="thinking" hidden><svg class="t-spin" viewBox="0 0 66 66" aria-hidden="true"><circle cx="33" cy="33" r="28"/></svg><span>arXiv에서 찾는 중…</span></div>
+          <button id="arxiv-more" class="t-btn t-btn--grey arxiv-more" type="button" hidden>더 보기</button>
+        </div>
+      </section>
+
+      <!-- 읽기 로드맵 -->
+      <section id="view-roadmap" class="pview" aria-label="읽기 로드맵">
+        <div class="pview__in">
+          <div class="rm-head">
+            <button id="roadmap-back" class="t-btn t-btn--sm t-btn--grey" type="button"><svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg> 논문으로</button>
+            <button id="roadmap-redo" class="t-btn t-btn--sm t-btn--grey" type="button" hidden>새로 만들기</button>
+          </div>
+          <p class="rm-eyebrow">이 논문의 앞뒤로 읽을 논문</p>
+          <h1 id="roadmap-seed" class="rm-title" lang="en"></h1>
+          <div id="roadmap-body"></div>
+        </div>
+      </section>
+
+      <!-- PDF 확대·축소 (원본 PDF를 볼 때만) -->
+      <div id="pdf-zoom" class="pdf-zoom" role="group" aria-label="PDF 확대·축소">
+        <button id="pdf-zoom-out" class="t-iconbtn t-iconbtn--sm" type="button" title="축소 (⌘−)" aria-label="축소"><svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+        <span id="pdf-zoom-value" class="pdf-zoom__value">100%</span>
+        <button id="pdf-zoom-in" class="t-iconbtn t-iconbtn--sm" type="button" title="확대 (⌘+)" aria-label="확대"><svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+        <span class="pdf-zoom__sep" aria-hidden="true"></span>
+        <button id="pdf-fit" class="pdf-zoom__fit" type="button" title="화면 폭에 맞추기 (⌘0)" aria-pressed="true">폭 맞춤</button>
+      </div>
 
       <!-- 뷰어 -->
       <section id="viewer" class="viewer" tabindex="-1">
@@ -181,6 +268,306 @@
     </main>
 
     <div id="toast" class="t-toast" role="status" hidden></div>
+
+    <!-- 오른쪽 사이드 뷰: 번역 / 질문 -->
+    <aside id="rside" class="rside" aria-label="사이드 뷰">
+      <div class="rside__head">
+        <div id="rside-tabs" class="t-seg t-seg--sm rside-tabs" role="tablist" aria-label="사이드 뷰">
+          <button type="button" role="tab" data-tab="tr">번역</button>
+          <button type="button" role="tab" data-tab="ask">질문</button>
+        </div>
+        <button id="rside-close" class="t-iconbtn t-iconbtn--sm" type="button" title="닫기" aria-label="사이드 뷰 닫기"><svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
+
+      <section id="rs-tr" class="rs-pane rs-tr" aria-label="번역">
+        <div class="tr-bar">
+          <span class="tr-bar__label">원문에 충실한 번역</span>
+          <div class="tr-state">
+            <button id="tr-start" class="t-btn t-btn--xs t-btn--primary" type="button" hidden>번역 시작</button>
+            <button id="btn-redo" class="t-btn t-btn--xs t-btn--grey" type="button" title="저장된 번역이 예전 방식이에요. 지금 방식으로 다시 번역해요" hidden>다시 번역</button>
+            <div id="tr-progress" class="tr-progress" role="status" hidden>
+              <span class="tr-progress__bar"><i id="tr-bar-fill"></i></span>
+              <span id="tr-count"></span>
+              <button id="tr-stop" class="t-btn t-btn--xs t-btn--grey" type="button">멈추기</button>
+            </div>
+          </div>
+        </div>
+        <div id="tr-reextract" class="tr-reextract" hidden>
+          <p>이 논문은 예전 방식으로 뽑은 원문이라 PDF와 번역이 어긋날 수 있어요. 원문을 PDF 글자 기준으로 다시 뽑으면 문장마다 정확히 맞아요.</p>
+          <button id="tr-reextract-btn" class="t-btn t-btn--sm t-btn--primary" type="button">원문 다시 뽑고 번역</button>
+          <span class="t-help">지금 번역은 지워지고 처음부터 다시 번역해요</span>
+        </div>
+        <div id="tr-list" class="tr-list"></div>
+        <div class="tr-empty">
+          <p id="tr-empty-text"></p>
+          <button id="tr-empty-start" class="t-btn t-btn--sm t-btn--primary" type="button">번역 시작</button>
+        </div>
+      </section>
+
+      <section id="rs-ask" class="rs-pane rs-ask" aria-label="질문">
+        <div class="ask__tools">
+          <button id="ask-sum" class="ask-pill" type="button"><span class="tf" aria-hidden="true">📝</span><span>이 논문 요약</span></button>
+          <button id="ask-easy" class="ask-pill" type="button" title="고른 구절, 없으면 지금 읽는 문단을 쉬운 말로 풀어 줘요"><span class="tf" aria-hidden="true">💡</span><span>쉬운 설명</span></button>
+          <div class="ask__tools-right">
+            <button id="ask-history" class="t-iconbtn t-iconbtn--sm ask__hist-btn" type="button" title="질문 기록" aria-label="질문 기록" aria-haspopup="dialog" aria-expanded="false">
+              <svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+              <span id="ask-history-dot" class="ask__hist-dot" hidden></span>
+            </button>
+            <button id="ask-new" class="t-iconbtn t-iconbtn--sm" type="button" title="새 대화" aria-label="새 대화">
+              <svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-6"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+          </div>
+        </div>
+        <div id="ask-log" class="chat-log ask__log">
+        <div id="ask-empty" class="ask__empty">
+          <p>논문에 대해 무엇이든 물어보세요. 본문에서 문장을 고르면 그 구절만 물어볼 수 있어요.</p>
+          <p class="ask__tip">이어지는 질문은 앞의 대화를 기억해요</p>
+        </div>
+      </div>
+      <form id="ask-form" class="chat-form ask__form">
+        <div id="ask-quote" class="ask__quote" hidden>
+          <span id="ask-quote-text"></span>
+          <button id="ask-quote-clear" class="t-iconbtn t-iconbtn--sm" type="button" aria-label="고른 구절 빼기"><svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </div>
+        <div class="chat-box">
+          <textarea id="ask-input" rows="1" placeholder="이 논문에 대해 질문" aria-label="질문"></textarea>
+          <button id="ask-send" class="t-iconbtn t-iconbtn--sm t-iconbtn--fill chat-send" type="submit" aria-label="보내기"><svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+        </div>
+      </form>
+      </section>
+    </aside>
+
+    <!-- 서재 폴더 이동 팝오버 -->
+    <div id="folder-menu" class="folder-menu" role="menu" aria-label="폴더로 이동" hidden></div>
+
+    <!-- 논문별 질문 기록 팝오버 -->
+    <div id="ask-history-pop" class="ask-hist-pop" role="dialog" aria-label="질문 기록" hidden>
+      <div class="ask-hist-pop__head">
+        <strong>질문 기록</strong>
+        <span id="ask-history-count" class="ask-hist-pop__count"></span>
+        <button id="ask-history-new" class="t-btn t-btn--xs t-btn--grey" type="button">새 대화</button>
+      </div>
+      <div id="ask-history-list" class="ask-hist-pop__list"></div>
+    </div>
+
+    <!-- 본문에서 고른 문장: 번역·질문 -->
+    <div id="sel-bubble" class="sel-bubble" hidden>
+      <div class="sel-bubble__row">
+        <button id="sel-gloss" class="t-btn t-btn--xs t-btn--grey" type="button">번역</button>
+        <button id="sel-easy" class="t-btn t-btn--xs t-btn--grey" type="button">쉬운 설명</button>
+        <form id="sel-form" class="sel-form">
+          <input id="sel-q" type="text" placeholder="이 구절에 대해 질문" aria-label="고른 구절에 대해 질문" />
+          <button class="t-iconbtn t-iconbtn--sm t-iconbtn--fill" type="submit" aria-label="질문하기"><svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+        </form>
+      </div>
+      <div id="gloss-out" class="gloss-out" hidden></div>
+    </div>
+
+    <!-- 그림 설명 영역 선택 안내 -->
+    <div id="pdf-crop-bar" class="pdf-crop-bar" role="status" hidden>
+      <span>그림·표·수식 영역을 드래그해서 선택하세요</span>
+      <button id="pdf-crop-cancel" class="t-btn t-btn--xs t-btn--grey" type="button">취소 <kbd class="kbd">Esc</kbd></button>
+    </div>
+
+    <!-- PDF 내부 링크(인용→레퍼런스) 이동 후 원래 자리로 돌아가기 -->
+    <button id="pdf-back" class="pdf-back" type="button" hidden>
+      <svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+      <span id="pdf-back-label">이전 위치로</span>
+    </button>
+
+    <!-- 자동 감지된 그림·표 호버 바 (커서 근처에 표시) -->
+    <div id="fig-hover" class="fig-hover-bar" hidden>
+      <button id="fig-hover-btn" class="fig-hover-btn" type="button"></button>
+      <button id="fig-hover-copy" class="t-iconbtn t-iconbtn--sm fig-hover-copy" type="button" title="이미지 복사" aria-label="이미지 복사"><svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+    </div>
+
+    <!-- 드래그로 선택한 영역의 요청 선택 팝오버 -->
+    <div id="fig-pick" class="fig-pick" role="dialog" aria-label="선택한 영역으로 할 일" hidden>
+      <div class="fig-pick__row">
+        <button class="t-btn t-btn--xs t-btn--primary" type="button" data-action="explain">그림 설명</button>
+        <button class="t-btn t-btn--xs t-btn--grey" type="button" data-action="summary">핵심 요약</button>
+        <button class="t-btn t-btn--xs t-btn--grey" type="button" data-action="symbols">수식·기호 풀이</button>
+        <div class="fig-pick__tools">
+          <button id="fig-pick-copy" class="t-iconbtn t-iconbtn--sm" type="button" title="이미지 복사" aria-label="이미지 복사"><svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+          <button id="fig-pick-retry" class="t-iconbtn t-iconbtn--sm" type="button" title="다시 선택" aria-label="다시 선택"><svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button>
+          <button id="fig-pick-close" class="t-iconbtn t-iconbtn--sm" type="button" title="취소" aria-label="취소"><svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </div>
+      </div>
+      <form id="fig-pick-form" class="sel-form fig-pick__form">
+        <input id="fig-pick-q" type="text" placeholder="이 영역에 대해 직접 질문…" aria-label="선택한 영역에 대해 직접 질문" />
+        <button class="t-iconbtn t-iconbtn--sm t-iconbtn--fill" type="submit" aria-label="질문하기"><svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+      </form>
+    </div>
+
+    <!-- 그림 설명 카드 (문라이트 방식: 드래그한 그림 옆에 띄우고 이어서 질문) -->
+    <div id="fig-card" class="fig-card" role="dialog" aria-label="그림 설명" hidden>
+      <div id="fig-head" class="fig-card__head">
+        <div class="fig-card__title">
+          <strong>그림 설명</strong>
+          <span id="fig-page" class="mdet-tag"></span>
+        </div>
+        <div class="fig-card__acts">
+          <button id="fig-redo" class="t-iconbtn t-iconbtn--sm" type="button" title="다시 설명" aria-label="다시 설명"><svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button>
+          <button id="fig-copy" class="t-iconbtn t-iconbtn--sm" type="button" title="설명 복사" aria-label="설명 복사"><svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+          <button id="fig-min" class="t-iconbtn t-iconbtn--sm" type="button" title="접기/펼치기" aria-label="접기/펼치기"><svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg></button>
+          <button id="fig-close" class="t-iconbtn t-iconbtn--sm" type="button" title="닫기" aria-label="닫기"><svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </div>
+      </div>
+      <div class="fig-card__body">
+        <button id="fig-preview-btn" class="fig-preview" type="button" title="클릭해서 크게 보기">
+          <img id="fig-preview" alt="선택한 그림" />
+        </button>
+        <div id="fig-ctx" class="fig-ctx" hidden></div>
+        <div id="fig-log" class="fig-log"></div>
+        <div id="fig-chips" class="fig-chips" hidden>
+          <button class="t-chip" type="button" data-q="이 그림의 핵심 결론만 3줄로 요약해 줘.">핵심만 3줄로</button>
+          <button class="t-chip" type="button" data-q="그림 속 축, 범례, 기호, 수치가 각각 무엇을 의미하는지 자세히 설명해 줘.">축·기호 자세히</button>
+          <button class="t-chip" type="button" data-q="이 그림이 논문의 본문 주장이나 실험 결과와 어떻게 연결되는지 설명해 줘.">본문 결과와 연결</button>
+        </div>
+      </div>
+      <form id="fig-form" class="fig-card__form">
+        <div class="fig-input-box">
+          <input id="fig-input" type="text" placeholder="이 그림에 대해 이어서 질문…" aria-label="이 그림에 대해 이어서 질문" />
+          <button id="fig-send" class="t-iconbtn t-iconbtn--sm t-iconbtn--fill" type="submit" aria-label="보내기"><svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+        </div>
+      </form>
+    </div>
+
+    <!-- 모델 설정 -->
+    <div id="model-dialog" class="t-overlay" hidden>
+      <div class="t-modal model-modal" role="dialog" aria-modal="true" aria-labelledby="model-title">
+        <div class="model-modal__head">
+          <div class="model-modal__title">
+            <h3 id="model-title">모델 연결</h3>
+            <span id="model-active-pill" class="model-active-pill"></span>
+          </div>
+          <div class="model-modal__acts">
+            <button id="model-recheck" class="t-btn t-btn--xs t-btn--grey" type="button">상태 새로고침</button>
+            <button id="model-close" class="t-iconbtn t-iconbtn--sm" type="button" aria-label="닫기"><svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+          </div>
+        </div>
+        <div class="model-body">
+          <nav id="model-nav" class="model-nav" aria-label="모델 공급자"></nav>
+          <section class="model-detail" aria-live="polite">
+            <div class="mdet-scroll">
+              <div class="mdet-head">
+                <div class="mdet-head__main">
+                  <span id="mdet-logo" class="mdet-logo" aria-hidden="true"></span>
+                  <div class="mdet-head__text">
+                    <div class="mdet-head__row">
+                      <h4 id="mdet-name"></h4>
+                      <span id="mdet-kind" class="mdet-tag"></span>
+                    </div>
+                    <p id="mdet-desc" class="mdet-desc"></p>
+                  </div>
+                </div>
+                <div class="mdet-head__cta">
+                  <span id="mdet-inuse" class="mdet-inuse" hidden>사용 중</span>
+                  <button id="mdet-use" class="t-btn t-btn--sm t-btn--primary" type="button" hidden>이 모델로 사용</button>
+                </div>
+              </div>
+
+              <div id="mdet-status-card" class="mdet-card">
+                <div class="mdet-status-row">
+                  <span id="mdet-dot" class="mdet-dot"></span>
+                  <strong id="mdet-status-title"></strong>
+                  <span id="mdet-endpoint" class="mdet-mono"></span>
+                </div>
+                <p id="mdet-status-msg" class="mdet-note"></p>
+                <div id="mdet-cli-guide" class="mdet-guide" hidden>
+                  <div id="mdet-cli-steps" class="mdet-steps"></div>
+                </div>
+              </div>
+
+              <div id="model-url-field" class="mdet-card" hidden>
+                <div class="mdet-card__head">
+                  <span class="t-label">API 주소</span>
+                  <span class="mdet-hint">OpenAI 호환 <code>/v1</code> 기준</span>
+                </div>
+                <form id="model-url-form" class="model-key-row">
+                  <label class="t-box"><input id="model-url" type="url" spellcheck="false" placeholder="https://api.example.com/v1" /></label>
+                  <button class="t-btn t-btn--sm t-btn--grey" type="submit">적용</button>
+                </form>
+                <p class="mdet-note">외부 서버는 <code>https://</code>만 허용돼요. 이 컴퓨터(<code>localhost</code>)는 <code>http://</code>도 쓸 수 있어요.</p>
+              </div>
+
+              <form id="model-key-form" class="mdet-card" hidden>
+                <div class="mdet-card__head">
+                  <div class="mdet-card__left">
+                    <span class="t-label">API 키</span>
+                    <span id="model-key-badge" class="mdet-tag"></span>
+                  </div>
+                  <button id="model-key-page" class="t-textlink" type="button">키 발급 페이지 ↗</button>
+                </div>
+                <div class="model-key-row">
+                  <label class="t-box model-key-box">
+                    <input id="model-key" type="password" autocomplete="off" spellcheck="false" />
+                    <button id="model-key-eye" class="t-iconbtn t-iconbtn--sm" type="button" aria-label="키 보기" title="키 보기">
+                      <svg class="t-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                  </label>
+                  <button class="t-btn t-btn--sm t-btn--primary" type="submit">저장</button>
+                  <button id="model-key-clear" class="t-btn t-btn--sm t-btn--grey" type="button" hidden>삭제</button>
+                </div>
+                <p id="model-key-note" class="mdet-note">키는 이 Mac의 소유자 전용 파일에만 저장되며, API 요금은 내 계정에 청구돼요.</p>
+              </form>
+
+              <div id="model-pick-field" class="mdet-card">
+                <div class="mdet-card__head">
+                  <span class="t-label">모델</span>
+                  <button id="model-refresh" class="t-textlink" type="button">목록 새로고침</button>
+                </div>
+                <select id="model-pick" class="t-select model-select"></select>
+                <form id="model-custom-form" class="model-custom-row">
+                  <label class="t-box"><input id="model-custom" type="text" spellcheck="false" placeholder="목록에 없는 모델 ID 직접 입력 (예: gemini-2.5-pro)" /></label>
+                  <button class="t-btn t-btn--xs t-btn--grey" type="submit">직접 지정</button>
+                </form>
+              </div>
+
+              <div id="mdet-backup-card" class="mdet-card mdet-card--compact">
+                <div class="mdet-card__head">
+                  <span class="t-label">자동 전환 백업</span>
+                  <span class="mdet-hint">주 모델이 한도에 걸리면 다음 백업으로 넘어가요</span>
+                </div>
+                <div id="mdet-backup-body"></div>
+              </div>
+            </div>
+
+            <div class="mdet-foot">
+              <p id="model-test-result" class="mdet-test-result"></p>
+              <div class="mdet-foot__acts">
+                <button id="model-test" class="t-btn t-btn--sm t-btn--grey" type="button">연결 테스트</button>
+                <button id="mdet-foot-use" class="t-btn t-btn--sm t-btn--primary" type="button">이 모델로 사용</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- 논문을 읽는 동안 -->
+    <div id="loading" class="loading" role="status" aria-live="polite" hidden>
+      <div class="loading__card">
+        <svg class="t-spin" viewBox="0 0 66 66" aria-hidden="true"><circle cx="33" cy="33" r="28"/></svg>
+        <span id="loading-msg"></span>
+      </div>
+    </div>
+
+    <!-- 링크로 열기 (⌘L) -->
+    <div id="link-dialog" class="t-overlay" hidden>
+      <form id="link-form" class="t-dialog link-dialog" role="dialog" aria-modal="true" aria-labelledby="link-title">
+        <h3 id="link-title">링크로 논문 열기</h3>
+        <p>arXiv 번호나 논문 페이지 링크, DOI를 넣으면 원문을 가져와요</p>
+        <label class="t-box t-box--lg">
+          <input id="link-input" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="예: 1706.03762" aria-label="arXiv 번호, 논문 링크 또는 DOI" />
+        </label>
+        <p id="link-error" class="t-help t-help--err" hidden></p>
+        <div class="t-dialog__actions">
+          <button id="link-cancel" class="t-btn t-btn--grey" type="button">닫기</button>
+          <button class="t-btn t-btn--primary" type="submit">열기</button>
+        </div>
+      </form>
+    </div>
 
     <!-- 드래그 앤 드롭 -->
     <div id="drop" class="drop"><div class="drop__inner">

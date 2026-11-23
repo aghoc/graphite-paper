@@ -25,9 +25,24 @@ comrak = { version = "1", default-features = false }
 notify = "8"
 urlencoding = "2"
 
+# 논문 읽기 (src/paper, OpenPaper에서 가져옴)
+base64 = "0.22"
+pdf-extract = "0.10"
+regex = "1"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+roxmltree = "0.21"
+scraper = "0.24"
+sha2 = "0.10"
+url = "2"
+
 [profile.release]
 opt-level = 3
 lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
+
+# `npm run dev`(디버그 빌드)에서도 PDF를 빨리 읽도록 의존 crate(pdf-extract·lopdf 등)는 최적화해서 빌드한다.
+# 디버그로 두면 논문 한 편에 1.7초, 최적화하면 0.2초 안팎이다. 앱 코드는 디버그 그대로라 다시 빌드는 빠르다.
+[profile.dev.package."*"]
+opt-level = 3

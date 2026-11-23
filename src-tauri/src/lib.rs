@@ -1,6 +1,7 @@
 //! Graphite Paper 백엔드
 //!
-//! - CLI 인자 / macOS 파일 열기 이벤트로 받은 경로를 바로 렌더링
+//! - CLI 인자 / macOS 파일 열기 이벤트로 받은 경로를 프론트엔드에 넘긴다 (마크다운·PDF)
+//! - 논문: PDF·arXiv·논문 링크 열기, 서재, 번역, 질문·요약, AI 찾기, 로드맵, 모델 설정은 `paper` 모듈
 //! - comrak으로 GFM + 수식 파싱, 상대 경로 이미지를 asset:// URL로 바꿈
 //! - 파일 탐색기: 고른 폴더를 한 단계씩 읽고(폴더·마크다운만), 새 .md 파일을 만든다
 //! - notify로 열린 파일만 감시. 편집 중(또는 저장 안 한 변경이 있음)이면
@@ -23,7 +24,10 @@ use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
+mod paper;
+
 const MD_EXTS: &[&str] = &["md", "markdown", "mdown", "mkd", "mkdn", "txt"];
+const PAPER_EXTS: &[&str] = &["pdf"];
 const IMG_EXTS: &[&str] = &[
     "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "avif", "apng",
 ];
@@ -160,10 +164,18 @@ fn make_doc(app: &AppHandle, p: &Path, raw: String) -> Doc {
     }
 }
 
-fn is_markdown_path(p: &Path) -> bool {
+fn has_ext(p: &Path, exts: &[&str]) -> bool {
     p.extension()
-        .map(|e| MD_EXTS.contains(&e.to_string_lossy().to_ascii_lowercase().as_str()))
+        .map(|e| exts.contains(&e.to_string_lossy().to_ascii_lowercase().as_str()))
         .unwrap_or(false)
+}
+
+fn is_markdown_path(p: &Path) -> bool {
+    has_ext(p, MD_EXTS)
+}
+
+fn is_paper_path(p: &Path) -> bool {
+    has_ext(p, PAPER_EXTS)
 }
 
 /// 실행 인자에서 첫 번째로 존재하는 파일 경로 (macOS의 `-psn_...` 같은 옵션은 건너뜀)
@@ -270,7 +282,7 @@ struct Entry {
 }
 
 /// 폴더 한 단계만 읽는다 (하위 폴더는 펼칠 때 따로 부른다).
-/// 숨김 파일은 빼고, 폴더와 마크다운 파일만 돌려준다. 폴더 먼저, 이름순.
+/// 숨김 파일은 빼고, 폴더와 마크다운·PDF 파일만 돌려준다. 폴더 먼저, 이름순.
 #[tauri::command]
 fn list_dir(path: String) -> Result<Vec<Entry>, String> {
     let dir = PathBuf::from(&path)
@@ -287,7 +299,7 @@ fn list_dir(path: String) -> Result<Vec<Entry>, String> {
             let p = e.path();
             // 심볼릭 링크는 가리키는 대상 기준으로 판단
             let is_dir = p.is_dir();
-            if !is_dir && !(p.is_file() && is_markdown_path(&p)) {
+            if !is_dir && !(p.is_file() && (is_markdown_path(&p) || is_paper_path(&p))) {
                 return None;
             }
             Some(Entry { name, path: p.to_string_lossy().into_owned(), is_dir })
@@ -351,11 +363,24 @@ fn open_file(app: AppHandle, state: State<'_, AppState>, path: String) -> Result
     Ok(doc)
 }
 
-/// 앱 시작 시 프론트엔드가 한 번 호출: CLI 인자나 OS에서 넘겨받은 파일을 바로 연다
+/// 앱 시작 시 프론트엔드가 한 번 호출: CLI 인자나 OS에서 넘겨받은 파일 경로.
+/// 마크다운인지 PDF인지는 프론트엔드가 확장자로 나눠 연다.
 #[tauri::command]
-fn take_launch_doc(app: AppHandle, state: State<'_, AppState>) -> Option<Doc> {
+fn take_launch_path(state: State<'_, AppState>) -> Option<String> {
     let p = state.pending.lock().unwrap().take()?;
-    open_file(app.clone(), state, p.to_string_lossy().into_owned()).ok()
+    Some(p.to_string_lossy().into_owned())
+}
+
+// ───────────────────────── 논문 ─────────────────────────
+
+/// 논문을 열면 프론트엔드가 부른다: 마크다운 파일 감시를 멈추고, 저장 대상도 비운다.
+/// 논문 자체는 `paper::commands`(서재·번역·AI)가 맡는다.
+#[tauri::command]
+fn close_markdown(state: State<'_, AppState>) {
+    *state.watcher.lock().unwrap() = None;
+    *state.current.lock().unwrap() = None;
+    state.disk_snapshot.lock().unwrap().clear();
+    state.guard.store(false, Ordering::SeqCst);
 }
 
 /// 편집 중인 원문을 미리 렌더링 (저장하지 않음)
@@ -414,9 +439,62 @@ fn dev_log(msg: String) {
     }
 }
 
+/// 개발 빌드에서만: `src/` 안의 프론트엔드 파일이 바뀌면 창을 자동으로 새로고침한다.
+#[cfg(debug_assertions)]
+fn start_dev_frontend_reload(app: &AppHandle) {
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../src");
+    if !dir.is_dir() {
+        return;
+    }
+    let handle = app.clone();
+    thread::spawn(move || {
+        let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
+        let Ok(mut watcher) = notify::recommended_watcher(tx) else {
+            return;
+        };
+        if watcher.watch(&dir, RecursiveMode::Recursive).is_err() {
+            return;
+        }
+        let is_front = |ev: &notify::Result<notify::Event>| match ev {
+            Ok(ev) => {
+                !matches!(ev.kind, EventKind::Access(_))
+                    && ev.paths.iter().any(|p| {
+                        matches!(
+                            p.extension().and_then(|e| e.to_str()),
+                            Some("js" | "css" | "html" | "svg")
+                        )
+                    })
+            }
+            Err(_) => false,
+        };
+        while let Ok(first) = rx.recv() {
+            let mut hit = is_front(&first);
+            loop {
+                match rx.recv_timeout(Duration::from_millis(250)) {
+                    Ok(ev) => hit |= is_front(&ev),
+                    Err(RecvTimeoutError::Timeout) => break,
+                    Err(RecvTimeoutError::Disconnected) => return,
+                }
+            }
+            if hit {
+                if let Some(w) = handle.get_webview_window("main") {
+                    eprintln!("[dev] src/ 변경 감지 → 새로고침");
+                    let _ = w.eval("location.reload()");
+                }
+            }
+        }
+        drop(watcher);
+    });
+}
+
 #[tauri::command]
 fn is_markdown(path: String) -> bool {
     is_markdown_path(Path::new(&path))
+}
+
+#[tauri::command]
+fn is_paper(path: String) -> bool {
+    is_paper_path(Path::new(&path))
 }
 
 // ───────────────────────── 실행 ─────────────────────────
@@ -428,6 +506,9 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(AppState::default())
         .setup(|app| {
+            // 논문 서재·모델 설정: <앱 데이터>/papers, <앱 데이터>/settings.json·keys.json
+            let data = app.path().app_data_dir()?;
+            app.manage(std::sync::Arc::new(paper::commands::AppState::new(data.join("papers"))?));
             if let Some(p) = cli_path() {
                 *app.state::<AppState>().pending.lock().unwrap() = Some(p);
             }
@@ -442,11 +523,51 @@ pub fn run() {
                     }
                 }
             });
+            #[cfg(debug_assertions)]
+            start_dev_frontend_reload(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             open_file,
-            take_launch_doc,
+            take_launch_path,
+            is_paper,
+            close_markdown,
+            paper::commands::languages,
+            paper::commands::library_list,
+            paper::commands::library_get,
+            paper::commands::library_remove,
+            paper::commands::library_set_read,
+            paper::commands::library_folders,
+            paper::commands::library_set_folders,
+            paper::commands::library_chats,
+            paper::commands::library_set_chats,
+            paper::commands::open_arxiv,
+            paper::commands::open_pdf,
+            paper::commands::open_pdf_path,
+            paper::commands::paper_pdf,
+            paper::commands::attach_pdf,
+            paper::commands::replace_doc,
+            paper::commands::arxiv_search,
+            paper::commands::ai_recommend,
+            paper::commands::llm_status,
+            paper::commands::llm_overview,
+            paper::commands::llm_settings,
+            paper::commands::llm_set_settings,
+            paper::commands::llm_set_key,
+            paper::commands::llm_models,
+            paper::commands::llm_open_key_page,
+            paper::commands::llm_backup,
+            paper::commands::paper_roadmap,
+            paper::commands::gloss_selection,
+            paper::commands::llm_test,
+            paper::commands::open_arxiv_page,
+            paper::commands::translation_start,
+            paper::commands::translation_redo,
+            paper::commands::translation_status,
+            paper::commands::translation_cancel,
+            paper::commands::ask_claude,
+            paper::commands::explain_figure,
+            paper::commands::summarize_paper,
             render_markdown,
             save_file,
             set_guard,
@@ -459,6 +580,10 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("Graphite Paper를 시작하지 못했어요")
         .run(|_app, _event| {
+            // 앱을 닫으면 돌고 있던 번역을 멈춘다
+            if let tauri::RunEvent::Exit = &_event {
+                _app.state::<std::sync::Arc<paper::commands::AppState>>().cancel_all();
+            }
             // macOS는 Finder 더블클릭/“다음으로 열기”를 실행 인자가 아니라 Opened 이벤트로 준다.
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             if let tauri::RunEvent::Opened { urls } = &_event {
@@ -521,5 +646,28 @@ mod sample {
         let md = std::fs::read_to_string(std::env::var("DUMP_MD").as_deref().unwrap_or("../docs/sample.md")).unwrap();
         let html = super::render_with(&md, |_| None);
         println!("SAMPLE_JSON={}", serde_json::json!({ "path": "/demo/sample.md", "name": "sample.md", "dir": "/demo", "raw": md, "html": html }));
+    }
+
+    /// `PAPER_IN=<PDF 경로 | arXiv 번호·링크> PAPER_OUT=<json 경로> cargo test -- --ignored dump_paper`
+    /// : 앱이 프론트엔드에 넘기는 논문 JSON을 파일로 쓴다 (화면 확인·디버깅용, 링크는 네트워크를 쓴다)
+    #[test]
+    #[ignore]
+    fn dump_paper() {
+        let input = std::env::var("PAPER_IN").expect("PAPER_IN");
+        let p = std::path::Path::new(&input);
+        let doc = if p.is_file() {
+            let bytes = std::fs::read(p).unwrap();
+            super::paper::pdf::parse(&bytes).unwrap().finish("pdf".into(), &input)
+        } else {
+            super::paper::link::fetch(&input).unwrap()
+        };
+        let view = serde_json::json!({ "paper": doc });
+        let out = std::env::var("PAPER_OUT").unwrap_or_else(|_| "paper.json".into());
+        std::fs::write(&out, serde_json::to_string(&view).unwrap()).unwrap();
+        let counts = doc.blocks.iter().fold(std::collections::BTreeMap::new(), |mut m, b| {
+            *m.entry(serde_json::to_value(b).unwrap()["kind"].as_str().unwrap().to_string()).or_insert(0) += 1;
+            m
+        });
+        println!("title={:?} source={:?} math={} blocks={counts:?}", doc.title, doc.source, doc.math.len());
     }
 }

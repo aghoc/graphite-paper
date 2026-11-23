@@ -14,6 +14,12 @@ const copies = [
   // Pretendard: 쓰는 글자 묶음만 내려받는 dynamic subset (CSP상 CDN을 쓸 수 없어 앱에 포함)
   ["node_modules/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css", `${out}/pretendard/pretendard.css`],
   ["node_modules/pretendard/dist/web/variable/woff2-dynamic-subset", `${out}/pretendard/woff2-dynamic-subset`],
+  // pdf.js: 원본 PDF 보기. 동아시아 글꼴 표(cmaps)와 PDF 기본 글꼴(standard_fonts)도 함께 넣는다
+  ["node_modules/pdfjs-dist/build/pdf.min.mjs", `${out}/pdfjs/pdf.min.mjs`],
+  ["node_modules/pdfjs-dist/build/pdf.worker.min.mjs", `${out}/pdfjs/pdf.worker.min.mjs`],
+  ["node_modules/pdfjs-dist/cmaps", `${out}/pdfjs/cmaps`],
+  ["node_modules/pdfjs-dist/standard_fonts", `${out}/pdfjs/standard_fonts`],
+  ["node_modules/pdfjs-dist/LICENSE", `${out}/pdfjs/LICENSE`],
 ];
 
 for (const [from, to] of copies) {

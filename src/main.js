@@ -1,4 +1,5 @@
-// Graphite Paper 프론트엔드: 렌더링 후처리(이미지·코드·KaTeX·Mermaid), 목차, 찾기, 편집 토글, 파일 감시 이벤트
+// Graphite Paper 프론트엔드: 렌더링 후처리(이미지·코드·KaTeX·Mermaid), 목차, 찾기, 편집 토글, 파일 감시 이벤트.
+// 논문 기능(서재·번역·AI)은 paper.js에 있고, 이 파일의 전역을 그대로 쓴다. 시작(boot)도 paper.js 끝에서 부른다.
 "use strict";
 
 const T = window.__TAURI__ ?? null;
@@ -6,10 +7,16 @@ const invoke = T ? T.core.invoke : async () => null;
 const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 const MOD_LABEL = IS_MAC ? "⌘" : "Ctrl";
 const MD_RE = /\.(md|markdown|mdown|mkd|mkdn|txt)$/i;
+const PAPER_RE = /\.pdf$/i;
 
 // 개발 빌드에서는 웹뷰 오류가 `npm run dev` 터미널에 [web]으로 찍힌다 (릴리스에서는 무시됨)
 const devLog = (msg) => { if (T) invoke("dev_log", { msg: String(msg) }).catch(() => {}); };
-window.addEventListener("error", (e) => devLog(`오류: ${e.message} (${e.filename}:${e.lineno})`));
+window.addEventListener("error", (e) => {
+  // 사이드바·사이드 뷰가 열리고 닫히는 동안 본문 크기 감시(ResizeObserver)가 한 프레임에 다 전하지 못했다는
+  // 브라우저 경고. 감시자들은 화면을 바로 바꾸지 않아 무해하므로 찍지 않는다.
+  if (/ResizeObserver loop/.test(e.message)) return;
+  devLog(`오류: ${e.message} (${e.filename}:${e.lineno})`);
+});
 window.addEventListener("unhandledrejection", (e) => devLog(`처리 안 된 Promise: ${e.reason?.message ?? e.reason}`));
 
 const $ = (id) => document.getElementById(id);
@@ -19,7 +26,7 @@ const content = $("content");
 const editor = $("editor");
 
 const state = {
-  doc: null,        // { path, name, dir, raw, html }
+  doc: null,        // { path, name, dir, raw, html } — 논문이면 kind: "paper", paper, source가 더 붙는다
   savedRaw: "",     // 디스크에 저장된 원문
   raw: "",          // 현재 원문 (편집 반영)
   html: "",         // 마지막으로 그린 HTML
@@ -420,211 +427,27 @@ function setTocOpen(open, { remember = true } = {}) {
 $("toc-scrim").addEventListener("click", () => setTocOpen(false, { remember: false }));
 $("toc-list").addEventListener("click", () => { if (isNarrow()) setTocOpen(false, { remember: false }); });
 
-// 사이드바 탭: 파일 / 목차. 문서가 없으면 목차가 없으니 파일 탭을 보여 준다.
-let sideTab = store.get("sideTab", "toc");
+// 사이드바 탭: 논문(서재) / 목차. 문서가 없으면 목차가 없으니 논문 탭을 보여 준다.
+let sideTab = store.get("sideTab", "papers");
+if (sideTab !== "papers" && sideTab !== "toc") sideTab = "papers";
 function setSideTab(tab, { remember = true } = {}) {
-  if (remember) { sideTab = tab; store.set("sideTab", tab); }
-  const shown = state.doc ? tab : "files";
+  const clean = tab === "toc" ? "toc" : "papers";
+  if (remember) { sideTab = clean; store.set("sideTab", clean); }
+  const shown = clean === "toc" && !state.doc ? "papers" : clean;
   app.dataset.side = shown;
-  $("tab-files").setAttribute("aria-selected", String(shown === "files"));
-  $("tab-toc").setAttribute("aria-selected", String(shown === "toc"));
+  for (const t of ["papers", "toc"]) $(`tab-${t}`).setAttribute("aria-selected", String(shown === t));
 }
-$("tab-files").addEventListener("click", () => setSideTab("files"));
+$("tab-papers").addEventListener("click", () => setSideTab("papers"));
 $("tab-toc").addEventListener("click", () => setSideTab("toc"));
 
-// ───────────────────────── 파일 탐색기 ─────────────────────────
-
-const TREE_ICONS = {
-  chev: '<path d="m9 6 6 6-6 6"/>',
-  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
-  file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
-  plus: '<path d="M12 5v14M5 12h14"/>',
-};
-const treeIcon = (name, cls = "") => `<svg class="t-ico ${cls}" viewBox="0 0 24 24" aria-hidden="true">${TREE_ICONS[name]}</svg>`;
+// 파일 탐색기 탭 제거 후 호환용 최소 객체
 const baseName = (p) => p.split(/[\\/]/).filter(Boolean).pop() ?? p;
 const parentDir = (p) => p.replace(/[\\/][^\\/]*$/, "") || "/";
-const isInside = (p, dir) => p === dir || p.startsWith(dir.endsWith("/") ? dir : `${dir}/`);
-
 const files = {
-  pane: $("pane-files"),
-  tree: $("files-tree"),
-  root: store.get("folder", null),          // 열어 둔 폴더 (절대 경로)
-  expanded: new Set(store.get("expanded", [])), // 펼친 하위 폴더
-  target: null,  // 새 파일을 만들 폴더: 마지막으로 누른 폴더(또는 누른 파일이 있는 폴더)
-  seq: 0,
-
-  saveExpanded() { store.set("expanded", [...this.expanded].filter((p) => this.root && isInside(p, this.root))); },
-
-  async setRoot(path) {
-    this.root = path;
-    this.target = null;
-    store.set("folder", path);
-    if (path) setSideTab("files");
-    updateChrome();
-    await this.refresh();
-  },
-
-  /** 펼친 상태를 지킨 채 트리를 다시 읽는다. 다 읽은 뒤 한 번에 바꿔 끼워 깜빡이지 않게 한다. */
-  async refresh() {
-    const seq = ++this.seq;
-    this.pane.classList.toggle("has-root", !!this.root);
-    if (!this.root) { this.tree.replaceChildren(); return; }
-    $("files-root").textContent = baseName(this.root);
-    $("files-root").title = this.root;
-    const box = document.createElement("div");
-    box.className = "tree-group";
-    const ok = await this.renderDir(this.root, box, 0);
-    if (seq !== this.seq) return;
-    if (!ok) {
-      toast("폴더를 열지 못했어요. 옮겨졌거나 지워졌을 수 있어요");
-      this.setRoot(null);
-      return;
-    }
-    this.tree.replaceChildren(...box.childNodes);
-    this.markCurrent();
-  },
-
-  async renderDir(path, box, depth) {
-    let entries;
-    try { entries = await invoke("list_dir", { path }); } catch (e) {
-      if (depth === 0) return false;
-      box.innerHTML = `<div class="tree-msg" style="--depth:${depth}"></div>`;
-      box.firstChild.textContent = String(e);
-      return true;
-    }
-    if (!entries?.length) {
-      box.innerHTML = `<div class="tree-msg" style="--depth:${depth}">${depth ? "마크다운 파일이 없어요" : "이 폴더에는 마크다운 파일이 없어요"}</div>`;
-      return true;
-    }
-    const jobs = [];
-    for (const e of entries) {
-      const item = document.createElement("div");
-      item.className = "tree-item";
-      item.setAttribute("role", "none");
-      const row = document.createElement("button");
-      row.type = "button";
-      row.setAttribute("role", "treeitem");
-      row.dataset.path = e.path;
-      row.style.setProperty("--depth", depth);
-      row.title = e.name;
-      if (e.isDir) {
-        const open = this.expanded.has(e.path);
-        row.className = "tree-row tree-row--dir";
-        row.dataset.dir = "1";
-        row.setAttribute("aria-expanded", String(open));
-        row.innerHTML = `${treeIcon("chev", "chev")}${treeIcon("folder")}<span class="tree-name"></span>`;
-        const add = document.createElement("button");
-        add.type = "button";
-        add.className = "t-iconbtn t-iconbtn--sm tree-add";
-        add.title = `${e.name}에 새 파일`;
-        add.setAttribute("aria-label", `${e.name} 폴더에 새 마크다운 파일`);
-        add.dataset.addIn = e.path;
-        add.innerHTML = treeIcon("plus");
-        const group = document.createElement("div");
-        group.className = "tree-group";
-        group.setAttribute("role", "group");
-        group.hidden = !open;
-        item.append(row, add, group);
-        if (open) jobs.push(this.renderDir(e.path, group, depth + 1));
-      } else {
-        row.className = "tree-row tree-row--file";
-        row.innerHTML = `${treeIcon("file")}<span class="tree-name"></span>`;
-        item.append(row);
-      }
-      row.querySelector(".tree-name").textContent = e.name;
-      box.append(item);
-    }
-    await Promise.all(jobs);
-    return true;
-  },
-
-  rowOf(path) { return this.tree.querySelector(`.tree-row[data-path="${CSS.escape(path)}"]`); },
-
-  async toggleDir(row, force) {
-    const path = row.dataset.path;
-    const open = typeof force === "boolean" ? force : row.getAttribute("aria-expanded") !== "true";
-    const group = row.parentElement.querySelector(":scope > .tree-group");
-    row.setAttribute("aria-expanded", String(open));
-    if (open) {
-      this.expanded.add(path);
-      const depth = (+row.style.getPropertyValue("--depth") || 0) + 1;
-      await this.renderDir(path, group, depth);
-      group.hidden = false;
-      this.markCurrent();
-    } else {
-      this.expanded.delete(path);
-      group.hidden = true;
-    }
-    this.saveExpanded();
-  },
-
-  markCurrent() {
-    this.tree.querySelectorAll(".tree-row[aria-current]").forEach((r) => r.removeAttribute("aria-current"));
-    const row = state.doc && this.rowOf(state.doc.path);
-    if (row) { row.setAttribute("aria-current", "page"); row.scrollIntoView({ block: "nearest" }); }
-  },
-
-  /** 열린 문서가 폴더 안에 있으면 상위 폴더를 펼쳐서 보여 준다 */
-  async reveal(path) {
-    if (!this.root || !isInside(path, this.root)) { this.markCurrent(); return; }
-    const chain = [];
-    for (let d = parentDir(path); d !== this.root && isInside(d, this.root); d = parentDir(d)) chain.unshift(d);
-    for (const d of chain) {
-      const row = this.rowOf(d);
-      if (!row) break;
-      if (row.getAttribute("aria-expanded") !== "true") await this.toggleDir(row, true);
-    }
-    this.markCurrent();
-  },
-
-  /** 새 파일 이름 입력 줄을 dir 폴더 맨 위에 띄운다 */
-  async startCreate(dir) {
-    this.tree.querySelector(".tree-new")?.remove();
-    let box = this.tree, depth = 0;
-    if (dir !== this.root) {
-      const row = this.rowOf(dir);
-      if (!row) { dir = this.root; } else {
-        if (row.getAttribute("aria-expanded") !== "true") await this.toggleDir(row, true);
-        box = row.parentElement.querySelector(":scope > .tree-group");
-        depth = (+row.style.getPropertyValue("--depth") || 0) + 1;
-      }
-    }
-    if (!isNarrow() && app.classList.contains("toc-hidden")) setTocOpen(true);
-    if (isNarrow()) setTocOpen(true, { remember: false });
-    setSideTab("files");
-    box.querySelector(":scope > .tree-msg")?.remove();
-
-    const line = document.createElement("div");
-    line.className = "tree-new";
-    line.style.setProperty("--depth", depth);
-    line.innerHTML = `${treeIcon("file")}<label class="t-box t-box--sm"><input type="text" spellcheck="false" placeholder="새 파일 이름" aria-label="새 파일 이름" /></label>`;
-    box.prepend(line);
-    const input = line.querySelector("input");
-    input.focus();
-
-    let busy = false;
-    const cancel = () => { line.remove(); if (!box.children.length) this.refresh(); };
-    input.addEventListener("keydown", async (e) => {
-      if (e.isComposing) return; // 한글 조합 중 Enter 무시
-      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); cancel(); }
-      if (e.key !== "Enter" || busy) return;
-      e.preventDefault();
-      const name = input.value.trim();
-      if (!name) { cancel(); return; }
-      busy = true;
-      try {
-        const path = await invoke("create_file", { dir, name });
-        line.remove();
-        await this.refresh();
-        await createdFile(path);
-      } catch (err) {
-        busy = false;
-        toast(String(err));
-        input.focus();
-      }
-    });
-    input.addEventListener("blur", () => setTimeout(() => { if (!busy && line.isConnected) cancel(); }, 120));
-  },
+  root: null,
+  refresh() {},
+  reveal() {},
+  markCurrent() {},
 };
 
 /** 새로 만든 파일을 열고 바로 편집기를 띄운다 */
@@ -637,20 +460,8 @@ async function createdFile(path) {
   }
 }
 
-async function openFolder() {
-  if (!T) return;
-  const path = await T.dialog.open({ multiple: false, directory: true, defaultPath: files.root ?? state.doc?.dir });
-  if (typeof path === "string") files.setRoot(path);
-}
-
-/** ⌘N: 폴더가 열려 있으면 트리에 이름 입력 줄을, 아니면 저장 위치를 묻는 창을 띄운다 */
+/** ⌘N: 새 마크다운 파일 저장 위치를 묻는 창을 띄운다 */
 async function newFile() {
-  if (files.root) {
-    let dir = files.target && isInside(files.target, files.root) ? files.target : null;
-    if (!dir && state.doc && isInside(state.doc.dir, files.root)) dir = state.doc.dir;
-    files.startCreate(dir ?? files.root);
-    return;
-  }
   if (!T) return;
   const path = await T.dialog.save({
     title: "새 마크다운 파일",
@@ -663,43 +474,6 @@ async function newFile() {
   } catch (e) { toast(String(e)); }
 }
 
-files.tree.addEventListener("click", (e) => {
-  const add = e.target.closest(".tree-add");
-  if (add) { files.target = add.dataset.addIn; files.startCreate(add.dataset.addIn); return; }
-  const row = e.target.closest(".tree-row");
-  if (!row) return;
-  if (row.dataset.dir) {
-    files.target = row.dataset.path;
-    files.toggleDir(row);
-  } else {
-    files.target = parentDir(row.dataset.path);
-    openPath(row.dataset.path);
-    if (isNarrow()) setTocOpen(false, { remember: false });
-  }
-});
-// 방향키로 위아래 이동, ←/→로 폴더 접기·펼치기
-files.tree.addEventListener("keydown", (e) => {
-  const row = e.target.closest?.(".tree-row");
-  if (!row) return;
-  const rows = [...files.tree.querySelectorAll(".tree-row")].filter((r) => r.offsetParent);
-  const i = rows.indexOf(row);
-  if (e.key === "ArrowDown") { e.preventDefault(); rows[i + 1]?.focus(); }
-  else if (e.key === "ArrowUp") { e.preventDefault(); rows[i - 1]?.focus(); }
-  else if (e.key === "ArrowRight" && row.dataset.dir) { e.preventDefault(); files.toggleDir(row, true); }
-  else if (e.key === "ArrowLeft") {
-    e.preventDefault();
-    if (row.dataset.dir && row.getAttribute("aria-expanded") === "true") files.toggleDir(row, false);
-    else row.parentElement.parentElement.closest(".tree-item")?.querySelector(":scope > .tree-row")?.focus();
-  }
-});
-$("btn-new-file").addEventListener("click", newFile);
-$("btn-refresh").addEventListener("click", async () => { await files.refresh(); toast("목록을 새로 읽었어요"); });
-$("btn-folder").addEventListener("click", openFolder);
-$("btn-folder-empty").addEventListener("click", openFolder);
-$("btn-folder-empty2").addEventListener("click", openFolder);
-// 다른 앱에서 파일을 만들거나 지운 뒤 돌아오면 목록을 다시 읽는다
-window.addEventListener("focus", () => { if (files.root && !files.tree.querySelector(".tree-new")) files.refresh(); });
-
 // ───────────────────────── 문서 열기 / 상태 ─────────────────────────
 
 function updateChrome() {
@@ -709,6 +483,7 @@ function updateChrome() {
   setSideTab(sideTab, { remember: false });
   app.classList.toggle("editing", state.editing);
   app.classList.toggle("dirty", state.dirty);
+  app.classList.toggle("is-paper", isPaper());
   $("doc-name").textContent = state.doc ? name : "";
   $("doc-name").title = state.doc?.path ?? "";
   $("seg-view").setAttribute("aria-selected", String(!state.editing));
@@ -717,6 +492,7 @@ function updateChrome() {
   const title = state.doc ? `${state.dirty ? "* " : ""}${name} — Graphite Paper` : "Graphite Paper";
   document.title = title;
   T?.window.getCurrentWindow().setTitle(title).catch(() => {});
+  if (typeof paperChrome === "function") paperChrome(); // 논문 도구·AI 화면 (paper.js)
 }
 
 /** 본문 위 위치 표시(.t-crumbs): 상위 폴더 두 단계 / 파일 이름 */
@@ -724,7 +500,7 @@ function renderCrumbs() {
   const nav = $("crumbs");
   nav.replaceChildren();
   if (!state.doc) return;
-  const parts = state.doc.path.split(/[\\/]/).filter(Boolean);
+  const parts = isPaper() ? ["서재", state.doc.source || state.doc.name] : state.doc.path.split(/[\\/]/).filter(Boolean);
   const shown = parts.slice(-3);
   if (parts.length > shown.length) shown.unshift("…");
   shown.forEach((p, i) => {
@@ -752,6 +528,7 @@ function setDirty(d) {
 }
 
 async function loadDoc(doc, { keepScroll = false } = {}) {
+  if (typeof P !== "undefined") { stopPoll(); pdfView.stop(); P.view = "doc"; app.dataset.view = "doc"; } // 마크다운을 열면 논문 화면을 닫는다
   state.doc = doc;
   state.raw = state.savedRaw = doc.raw;
   state.editing = false;
@@ -773,6 +550,7 @@ async function confirmDiscard(message) {
 async function openPath(path) {
   if (!path) return;
   if (state.doc && path === state.doc.path && !state.dirty) return;
+  if (PAPER_RE.test(path)) { await importPdf(path); return; } // 서재에 넣고 연다 (paper.js)
   if (!(await confirmDiscard("저장하지 않은 변경이 있어요. 버리고 다른 파일을 열까요?"))) return;
   try {
     const doc = await invoke("open_file", { path });
@@ -787,7 +565,7 @@ async function openDialog() {
   const path = await T.dialog.open({
     multiple: false,
     directory: false,
-    filters: [{ name: "Markdown", extensions: ["md", "markdown", "mdown", "mkd", "mkdn", "txt"] }],
+    filters: [{ name: "논문 PDF · 마크다운", extensions: ["pdf", "md", "markdown", "mdown", "mkd", "mkdn", "txt"] }],
   });
   if (typeof path === "string") openPath(path);
 }
@@ -796,6 +574,7 @@ async function openDialog() {
 
 async function toggleEdit(force) {
   if (!state.doc) return;
+  if (isPaper()) { if (force !== false) toast("논문은 편집할 수 없어요"); return; }
   const next = typeof force === "boolean" ? force : !state.editing;
   if (next === state.editing) return;
   if (next) {
@@ -999,7 +778,7 @@ editor.addEventListener("keydown", (e) => {
 });
 
 async function save() {
-  if (!state.doc) return;
+  if (!state.doc || isPaper()) return;
   if (state.editing) state.raw = editor.value;
   if (state.raw === state.savedRaw && !state.conflict) {
     toast("이미 저장되어 있어요");
@@ -1246,20 +1025,25 @@ document.addEventListener("keydown", (e) => {
   switch (e.code) {
     case "KeyE": e.preventDefault(); toggleEdit(); break;
     case "KeyS": e.preventDefault(); save(); break;
-    case "KeyO": e.preventDefault(); e.shiftKey ? openFolder() : openDialog(); break;
+    case "KeyO": e.preventDefault(); openDialog(); break;
     case "KeyN": e.preventDefault(); newFile(); break;
+    case "KeyL": e.preventDefault(); linkDialog.show(); break;
+    case "KeyJ": e.preventDefault(); rside.toggle("ask"); break;
     case "KeyF": e.preventDefault(); search.show(); break;
-    case "Backslash": e.preventDefault(); if (state.doc || files.root) setTocOpen(app.classList.contains("toc-hidden")); break;
-    case "Equal": case "NumpadAdd": e.preventDefault(); setFont(fontSize + 1); break;
-    case "Minus": case "NumpadSubtract": e.preventDefault(); setFont(fontSize - 1); break;
-    case "Digit0": case "Numpad0": e.preventDefault(); setFont(FONT_DEFAULT); toast("글자 크기를 처음으로 돌렸어요"); break;
+    case "Backslash": e.preventDefault(); setTocOpen(app.classList.contains("toc-hidden")); break;
+    // 원본 PDF를 보는 중이면 ⌘+/⌘−/⌘0은 PDF 확대·축소·폭 맞춤 (paper.js)
+    case "Equal": case "NumpadAdd": e.preventDefault(); if (pdfView.active()) pdfView.zoomBy(PDF_STEP); else setFont(fontSize + 1); break;
+    case "Minus": case "NumpadSubtract": e.preventDefault(); if (pdfView.active()) pdfView.zoomBy(1 / PDF_STEP); else setFont(fontSize - 1); break;
+    case "Digit0": case "Numpad0": e.preventDefault(); if (pdfView.active()) pdfView.fitWidth(); else { setFont(FONT_DEFAULT); toast("글자 크기를 처음으로 돌렸어요"); } break;
   }
 });
 
 // ───────────────────────── 버튼 ─────────────────────────
 
-$("btn-open").addEventListener("click", openDialog);
 $("btn-open-empty").addEventListener("click", openDialog);
+$("btn-link").addEventListener("click", () => linkDialog.show());
+$("btn-link-empty").addEventListener("click", () => linkDialog.show());
+$("btn-ai-empty").addEventListener("click", () => setView("ai"));
 $("btn-search").addEventListener("click", () => (search.open ? search.close() : search.show()));
 $("btn-toc").addEventListener("click", () => setTocOpen(app.classList.contains("toc-hidden")));
 $("seg-view").addEventListener("click", () => toggleEdit(false));
@@ -1316,9 +1100,11 @@ async function boot() {
     else if (payload.type === "leave") drop.classList.remove("show");
     else if (payload.type === "drop") {
       drop.classList.remove("show");
+      const pdf = payload.paths.find((p) => PAPER_RE.test(p));
       const md = payload.paths.find((p) => MD_RE.test(p)) ?? payload.paths[0];
-      if (md && (await invoke("is_markdown", { path: md }))) openPath(md);
-      else toast("마크다운 파일(.md)만 열 수 있어요");
+      if (pdf && (await invoke("is_paper", { path: pdf }))) openPath(pdf);
+      else if (md && (await invoke("is_markdown", { path: md }))) openPath(md);
+      else toast("PDF나 마크다운 파일만 열 수 있어요");
     }
   });
 
@@ -1331,15 +1117,15 @@ async function boot() {
     if (!ok) e.preventDefault();
   });
 
-  // CLI 인자 / 파일 연결로 넘어온 문서를 바로 그리고 창을 띄운다.
-  // 본문은 동기적으로 붙고, 수식·다이어그램·하이라이트는 창이 뜬 뒤 이어서 채워진다.
+  // CLI 인자 / 파일 연결로 넘어온 문서를 열고 창을 띄운다.
+  // 마크다운은 곧바로 그려지고, PDF는 읽는 동안 진행 표시가 뜬다.
   try {
-    const doc = await invoke("take_launch_doc");
-    if (doc) loadDoc(doc);
+    const path = await invoke("take_launch_path");
+    if (path) openPath(path);
   } catch (e) {
     toast(String(e));
   }
   requestAnimationFrame(() => { win.show().catch(() => {}); enableAnim(); });
 }
 
-boot();
+// boot()는 paper.js가 논문 기능을 준비한 뒤 부른다.
