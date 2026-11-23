@@ -9,9 +9,19 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/aghoc/graphite-paper/raw/main/downloads/Graphite-Paper-Windows-Setup.exe"><strong>Windows 다운로드 (.exe)</strong></a>
-  &nbsp;·&nbsp;
-  <a href="https://github.com/aghoc/graphite-paper/raw/main/downloads/Graphite-Paper-macOS.dmg"><strong>macOS 다운로드 (.dmg)</strong></a>
+  <a href="https://github.com/aghoc/graphite-paper/raw/main/downloads/Graphite-Paper-Windows-Setup.exe">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/assets/btn-download-windows-dark.svg">
+      <img alt="Windows 다운로드 (.exe)" src="docs/assets/btn-download-windows-light.svg" height="40">
+    </picture>
+  </a>
+  &nbsp;
+  <a href="https://github.com/aghoc/graphite-paper/raw/main/downloads/Graphite-Paper-macOS.dmg">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/assets/btn-download-macos-dark.svg">
+      <img alt="macOS 다운로드 (.dmg)" src="docs/assets/btn-download-macos-light.svg" height="40">
+    </picture>
+  </a>
 </p>
 
 <p align="center">
@@ -24,10 +34,26 @@
 
 ## 다운로드
 
-아래 링크를 누르면 최신 설치 파일이 바로 내려받아집니다. ([SHA-256 체크섬](downloads/CHECKSUMS.txt))
+아래 버튼을 누르면 최신 설치 파일이 바로 내려받아집니다. ([SHA-256 체크섬](downloads/CHECKSUMS.txt))
 
-- **Windows (64-bit)**: [Graphite-Paper-Windows-Setup.exe](https://github.com/aghoc/graphite-paper/raw/main/downloads/Graphite-Paper-Windows-Setup.exe)
-- **macOS (Apple Silicon)**: [Graphite-Paper-macOS.dmg](https://github.com/aghoc/graphite-paper/raw/main/downloads/Graphite-Paper-macOS.dmg)
+<p>
+  <a href="https://github.com/aghoc/graphite-paper/raw/main/downloads/Graphite-Paper-Windows-Setup.exe">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/assets/btn-download-windows-dark.svg">
+      <img alt="Windows 다운로드 (.exe)" src="docs/assets/btn-download-windows-light.svg" height="40">
+    </picture>
+  </a>
+  &nbsp;
+  <a href="https://github.com/aghoc/graphite-paper/raw/main/downloads/Graphite-Paper-macOS.dmg">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="docs/assets/btn-download-macos-dark.svg">
+      <img alt="macOS 다운로드 (.dmg)" src="docs/assets/btn-download-macos-light.svg" height="40">
+    </picture>
+  </a>
+</p>
+
+- **Windows**: 64-bit (`x64`) 설치 파일
+- **macOS**: Apple Silicon (`arm64`) 디스크 이미지
 
 > **처음 실행 시 보안 경고가 뜰 때**  
 > 별도 코드 서명이 없는 개인 프로젝트 앱이라 처음 열 때 OS 경고가 뜰 수 있습니다.

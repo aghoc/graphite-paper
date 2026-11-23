@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="208" height="40" viewBox="0 0 208 40" role="img" aria-label="macOS 다운로드 (.dmg)">
+  <rect x="0.5" y="0.5" width="207" height="39" rx="6" fill="#f6f8fa" stroke="#d1d9e0" stroke-width="1"/>
+  <g transform="translate(15, 10.5)" fill="#1f2328">
+    <path d="M12.665 8.47c-.02-2.025 1.654-3.003 1.73-3.05-.945-1.38-2.413-1.564-2.93-1.586-1.235-.13-2.432.738-3.06.738-.64 0-1.608-.724-2.65-.703-1.35.02-2.607.794-3.298 2.005-1.422 2.463-.362 6.094 1.007 8.088.678.976 1.477 2.067 2.524 2.028 1.022-.042 1.404-.653 2.638-.653 1.224 0 1.577.653 2.648.628 1.095-.018 1.785-.983 2.444-1.966.783-1.124 1.097-2.23 1.11-2.287-.025-.01-2.142-.818-2.163-3.242zM10.654 2.86c.556-.683.937-1.615.83-2.56-.805.035-1.805.546-2.38 1.217-.508.587-.962 1.545-.844 2.456.902.07 1.829-.455 2.394-1.113z"/>
+  </g>
+  <text x="38" y="24.8" fill="#1f2328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', Helvetica, Arial, sans-serif" font-size="13.5" font-weight="600">macOS 다운로드</text>
+  <rect x="146" y="10" width="48" height="20" rx="10" fill="#e7ecf0"/>
+  <text x="170" y="23.8" text-anchor="middle" fill="#59636e" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace" font-size="11" font-weight="600">.dmg</text>
+</svg>
