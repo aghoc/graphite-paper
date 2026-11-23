@@ -10,6 +10,8 @@
     "dev": "tauri dev",
     "dev:sample": "tauri dev -- -- docs/sample.md",
     "build": "tauri build",
+    "build:win": "bash scripts/build-win.sh",
+    "publish:downloads": "bash scripts/publish-downloads.sh",
     "update": "bash scripts/update-app.sh",
     "tauri": "tauri"
   },

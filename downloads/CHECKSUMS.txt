@@ -1,0 +1,5 @@
+Graphite Paper v0.1.0
+Built: 2026-11-23 22:24 KST
+
+c05bf158cd71d786db5f75a0c22d0f78b60d09c6e1a44701a94d9c6326f3fca1  Graphite-Paper-Windows-Setup.exe
+95f3efe33b10f61793ab6820864836ae178af5a9e9d0aab4730d9d10f157eae0  Graphite-Paper-macOS.dmg

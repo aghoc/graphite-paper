@@ -5,16 +5,34 @@
 <h1 align="center">Graphite Paper</h1>
 
 <p align="center">
-  원본 PDF를 보면서 문장 단위 번역, 그림·수식 설명, AI 질문을 한 화면에서 다루는 macOS 논문 리더
+  원본 PDF를 보면서 문장 단위 번역, 그림·수식 설명, AI 질문을 한 화면에서 다루는 macOS·Windows 논문 리더
+</p>
+
+<p align="center">
+  <a href="https://github.com/aghoc/graphite-paper/raw/main/downloads/Graphite-Paper-Windows-Setup.exe"><strong>Windows 다운로드 (.exe)</strong></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/aghoc/graphite-paper/raw/main/downloads/Graphite-Paper-macOS.dmg"><strong>macOS 다운로드 (.dmg)</strong></a>
 </p>
 
 <p align="center">
   <img src="docs/assets/demo.gif" alt="Graphite Paper 데모" width="840">
 </p>
 
-[Graphite](https://github.com/aghoc/graphite)의 화면과 디자인을 바탕으로 논문 읽기 기능을 더한 macOS 앱입니다. PDF 원본 레이아웃을 그대로 보면서 오른쪽 사이드 뷰에서 문장 단위로 연결된 번역과 AI 질문을 함께 쓸 수 있습니다.
+[Graphite](https://github.com/aghoc/graphite)의 화면과 디자인을 바탕으로 논문 읽기 기능을 더한 macOS·Windows 데스크톱 앱입니다. PDF 원본 레이아웃을 그대로 보면서 오른쪽 사이드 뷰에서 문장 단위로 연결된 번역과 AI 질문을 함께 쓸 수 있습니다.
 
 번역과 질문은 컴퓨터에 로그인해 둔 **Claude Code**, **Codex CLI**, **Gemini CLI**를 불러 처리하므로 기존 AI 구독이 있다면 API 키 없이 바로 시작할 수 있습니다. 필요하면 Anthropic, OpenAI, Google Gemini, DeepSeek, OpenRouter, Ollama 등 API도 연결할 수 있습니다.
+
+## 다운로드
+
+아래 링크를 누르면 최신 설치 파일이 바로 내려받아집니다. ([SHA-256 체크섬](downloads/CHECKSUMS.txt))
+
+- **Windows (64-bit)**: [Graphite-Paper-Windows-Setup.exe](https://github.com/aghoc/graphite-paper/raw/main/downloads/Graphite-Paper-Windows-Setup.exe)
+- **macOS (Apple Silicon)**: [Graphite-Paper-macOS.dmg](https://github.com/aghoc/graphite-paper/raw/main/downloads/Graphite-Paper-macOS.dmg)
+
+> **처음 실행 시 보안 경고가 뜰 때**  
+> 별도 코드 서명이 없는 개인 프로젝트 앱이라 처음 열 때 OS 경고가 뜰 수 있습니다.
+> - **Windows**: "Windows의 PC 보호" 창에서 **추가 정보 → 실행**을 눌러 설치하세요.
+> - **macOS**: "확인되지 않은 개발자" 경고가 뜨면 **시스템 설정 → 개인정보 보호 및 보안**에서 **확인 없이 열기**를 누르거나, 터미널에서 `xattr -cr "/Applications/Graphite Paper.app"`을 실행하세요.
 
 ## 주요 기능
 
@@ -41,9 +59,11 @@
 - **로컬 CLI (구독 활용)**: Claude Code, Codex CLI, Gemini CLI
 - **API & 로컬 서버**: Anthropic API, OpenAI, Google Gemini, DeepSeek, OpenRouter, OpenGateway, Ollama(로컬), 커스텀 OpenAI 호환 서버
 - **자동 전환 백업**: 주 모델이 사용 한도에 걸리면 설정해 둔 백업 모델로 자동 전환합니다.
-- **로컬 키 보관**: 입력한 API 키는 macOS 소유자 전용 파일(`keys.json`)에만 저장되며 웹뷰로 전달되지 않습니다.
+- **로컬 키 보관**: 입력한 API 키는 컴퓨터의 사용자 전용 파일(`keys.json`)에만 저장되며 웹뷰로 전달되지 않습니다.
 
 ## 단축키
+
+Windows에서는 `⌘` 대신 `Ctrl` 키를 사용합니다.
 
 | 단축키 | 동작 |
 | --- | --- |
@@ -72,11 +92,21 @@ cd src-tauri
 cargo test
 ```
 
-앱 번들 빌드 및 `/Applications/Graphite Paper.app` 설치(교체):
+앱 번들 빌드 및 배포:
 
 ```bash
-npm run build   # .app 및 .dmg 빌드
-npm run update  # 릴리스 .app 빌드 후 /Applications/Graphite Paper.app 교체
+npm run build              # 현재 OS용 설치 파일 빌드 (macOS: .app/.dmg, Windows: .exe/.msi)
+npm run build:win          # macOS에서 Windows 64-bit 설치 파일(.exe) 크로스 컴파일
+npm run publish:downloads  # macOS(.dmg) + Windows(.exe) 빌드 후 downloads/에 커밋·푸시
+npm run update             # macOS 릴리스 .app 빌드 후 /Applications/Graphite Paper.app 교체
+```
+
+macOS에서 `build:win`을 처음 실행할 때는 크로스 컴파일 도구를 한 번 설치해야 합니다.
+
+```bash
+rustup target add x86_64-pc-windows-msvc
+brew install nsis llvm lld
+cargo install --locked cargo-xwin
 ```
 
 구현 상세와 구조는 [docs/PLAN.md](docs/PLAN.md)에서 확인할 수 있습니다.

@@ -1847,6 +1847,8 @@ $("lang-select").addEventListener("change", (e) => {
 
 // ───────────────────────── 모델 ─────────────────────────
 
+const IS_WIN = /Win/i.test(navigator.platform || navigator.userAgent);
+
 const SLOT_GROUPS = [
   {
     title: "구독 · CLI",
@@ -1854,9 +1856,14 @@ const SLOT_GROUPS = [
       {
         slot: "claude-code", provider: "claude-code", badge: "CC", name: "Claude Code", kind: "구독 CLI",
         short: "Claude 구독",
-        desc: "이 Mac에 로그인한 Claude Code 구독으로 번역과 질문을 해요. 별도 API 키가 필요 없어요.",
+        desc: "이 컴퓨터에 로그인한 Claude Code 구독으로 번역과 질문을 해요. 별도 API 키가 필요 없어요.",
         steps: [
-          { label: "1. 설치", cmd: "curl -fsSL https://claude.ai/install.sh | bash" },
+          {
+            label: IS_WIN ? "1. 설치 (PowerShell)" : "1. 설치",
+            cmd: IS_WIN
+              ? "irm https://claude.ai/install.ps1 | iex"
+              : "curl -fsSL https://claude.ai/install.sh | bash",
+          },
           { label: "2. 로그인", cmd: "claude auth login" },
         ],
       },
@@ -1933,7 +1940,7 @@ const SLOT_GROUPS = [
       {
         slot: "openai:ollama", provider: "openai", preset: "ollama", badge: "Ol", name: "Ollama (로컬)", kind: "로컬 서버",
         short: "localhost:11434",
-        desc: "내 Mac에서 실행 중인 Ollama 로컬 모델로 오프라인 번역과 질문을 해요.",
+        desc: "이 컴퓨터에서 실행 중인 Ollama 로컬 모델로 오프라인 번역과 질문을 해요.",
         customPh: "예: qwen2.5:14b, llama3.3",
       },
       {
