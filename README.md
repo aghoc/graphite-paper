@@ -9,10 +9,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/aghoc/graphite-paper/raw/main/downloads/Graphite-Paper-Windows-Setup.exe">
+  <a href="https://github.com/aghoc/graphite-paper/raw/main/downloads/Graphite-Paper-Windows.zip">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="docs/assets/btn-download-windows-dark.svg">
-      <img alt="Windows 다운로드 (.exe)" src="docs/assets/btn-download-windows-light.svg" height="40">
+      <img alt="Windows 다운로드 (.zip)" src="docs/assets/btn-download-windows-light.svg" height="40">
     </picture>
   </a>
   &nbsp;
@@ -34,13 +34,13 @@
 
 ## 다운로드
 
-아래 버튼을 누르면 최신 설치 파일이 바로 내려받아집니다. ([SHA-256 체크섬](downloads/CHECKSUMS.txt))
+아래 버튼을 누르면 최신 파일이 바로 내려받아집니다. ([SHA-256 체크섬](downloads/CHECKSUMS.txt))
 
 <p>
-  <a href="https://github.com/aghoc/graphite-paper/raw/main/downloads/Graphite-Paper-Windows-Setup.exe">
+  <a href="https://github.com/aghoc/graphite-paper/raw/main/downloads/Graphite-Paper-Windows.zip">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="docs/assets/btn-download-windows-dark.svg">
-      <img alt="Windows 다운로드 (.exe)" src="docs/assets/btn-download-windows-light.svg" height="40">
+      <img alt="Windows 다운로드 (.zip)" src="docs/assets/btn-download-windows-light.svg" height="40">
     </picture>
   </a>
   &nbsp;
@@ -52,12 +52,12 @@
   </a>
 </p>
 
-- **Windows**: 64-bit (`x64`) 설치 파일
+- **Windows**: 64-bit (`x64`) 포터블 — 압축을 풀고 `Graphite Paper.exe`를 바로 실행하세요 (설치 불필요)
 - **macOS**: Apple Silicon (`arm64`) 디스크 이미지
 
 > **처음 실행 시 보안 경고가 뜰 때**  
 > 별도 코드 서명이 없는 개인 프로젝트 앱이라 처음 열 때 OS 경고가 뜰 수 있습니다.
-> - **Windows**: "Windows의 PC 보호" 창에서 **추가 정보 → 실행**을 눌러 설치하세요.
+> - **Windows**: "Windows의 PC 보호" 창에서 **추가 정보 → 실행**을 누르세요.
 > - **macOS**: "확인되지 않은 개발자" 경고가 뜨면 **시스템 설정 → 개인정보 보호 및 보안**에서 **확인 없이 열기**를 누르거나, 터미널에서 `xattr -cr "/Applications/Graphite Paper.app"`을 실행하세요.
 
 ## 주요 기능
@@ -122,8 +122,8 @@ cargo test
 
 ```bash
 npm run build              # 현재 OS용 설치 파일 빌드 (macOS: .app/.dmg, Windows: .exe/.msi)
-npm run build:win          # macOS에서 Windows 64-bit 설치 파일(.exe) 크로스 컴파일
-npm run publish:downloads  # macOS(.dmg) + Windows(.exe) 빌드 후 downloads/에 커밋·푸시
+npm run build:win          # macOS에서 Windows 64-bit 포터블(.zip) 크로스 컴파일
+npm run publish:downloads  # macOS(.dmg) + Windows 포터블(.zip) 빌드 후 downloads/에 커밋·푸시
 npm run update             # macOS 릴리스 .app 빌드 후 /Applications/Graphite Paper.app 교체
 ```
 
@@ -131,7 +131,7 @@ macOS에서 `build:win`을 처음 실행할 때는 크로스 컴파일 도구를
 
 ```bash
 rustup target add x86_64-pc-windows-msvc
-brew install nsis llvm lld
+brew install llvm lld
 cargo install --locked cargo-xwin
 ```
 

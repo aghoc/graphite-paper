@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Windows(.exe)와 macOS(.dmg) 설치 파일을 빌드해 현재 브랜치(main)의 `downloads/` 폴더에 반영하고 푸시한다.
+# Windows 포터블(.zip)과 macOS(.dmg) 설치 파일을 빌드해 현재 브랜치(main)의 `downloads/` 폴더에 반영하고 푸시한다.
 #   npm run publish:downloads                  # 빌드 후 커밋·푸시
 #   npm run publish:downloads -- --skip-build  # 이미 빌드된 파일만 복사 후 커밋·푸시
 #   npm run publish:downloads -- --no-push     # 빌드·복사만 하고 커밋·푸시는 하지 않음
@@ -27,15 +27,15 @@ if [ "$SKIP_BUILD" -eq 0 ]; then
   echo "▸ macOS 설치 파일(.dmg) 빌드 중…"
   npx tauri build --bundles dmg
 
-  echo "▸ Windows 설치 파일(.exe) 빌드 중…"
+  echo "▸ Windows 포터블(.zip) 빌드 중…"
   bash "$ROOT/scripts/build-win.sh"
 fi
 
-WIN_EXE="$(find "$ROOT/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis" -maxdepth 1 -name '*-setup.exe' 2>/dev/null | head -n 1 || true)"
+WIN_ZIP="$ROOT/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/portable/Graphite-Paper-Windows.zip"
 MAC_DMG="$(find "$ROOT/src-tauri/target/release/bundle/dmg" -maxdepth 1 -name '*.dmg' 2>/dev/null | head -n 1 || true)"
 
-if [ -z "$WIN_EXE" ] && [ -z "$MAC_DMG" ]; then
-  echo "✗ 업로드할 설치 파일을 찾지 못했어요. 먼저 빌드를 실행해 주세요."
+if [ ! -f "$WIN_ZIP" ] && [ -z "$MAC_DMG" ]; then
+  echo "✗ 업로드할 파일을 찾지 못했어요. 먼저 빌드를 실행해 주세요."
   exit 1
 fi
 
@@ -48,10 +48,10 @@ mkdir -p "$ROOT/downloads"
 FILES=()
 
 echo "▸ downloads/ 폴더 갱신 중… (v$VERSION)"
-if [ -n "$WIN_EXE" ]; then
-  cp "$WIN_EXE" "$ROOT/downloads/Graphite-Paper-Windows-Setup.exe"
-  FILES+=("Graphite-Paper-Windows-Setup.exe")
-  echo "  • downloads/Graphite-Paper-Windows-Setup.exe ($(du -h "$WIN_EXE" | awk '{print $1}'))"
+if [ -f "$WIN_ZIP" ]; then
+  cp "$WIN_ZIP" "$ROOT/downloads/Graphite-Paper-Windows.zip"
+  FILES+=("Graphite-Paper-Windows.zip")
+  echo "  • downloads/Graphite-Paper-Windows.zip ($(du -h "$WIN_ZIP" | awk '{print $1}'))"
 fi
 
 if [ -n "$MAC_DMG" ]; then
@@ -77,11 +77,11 @@ fi
 
 git add "$ROOT/downloads"
 if git diff --cached --quiet -- "$ROOT/downloads"; then
-  echo "✓ 변경된 설치 파일이 없어요."
+  echo "✓ 변경된 파일이 없어요."
   exit 0
 fi
 
-git commit -m "Update installers for v$VERSION" -- "$ROOT/downloads"
+git commit -m "Update downloads for v$VERSION" -- "$ROOT/downloads"
 echo "▸ GitHub \`$BRANCH\` 브랜치로 푸시 중…"
 git push origin "$BRANCH"
 
