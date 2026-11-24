@@ -25,7 +25,7 @@ cd "$ROOT"
 
 if [ "$SKIP_BUILD" -eq 0 ]; then
   echo "▸ macOS 설치 파일(.dmg) 빌드 중…"
-  npx tauri build --bundles dmg
+  APPLE_SIGNING_IDENTITY="${APPLE_SIGNING_IDENTITY:--}" npx tauri build --bundles dmg
 
   echo "▸ Windows 포터블(.zip) 빌드 중…"
   bash "$ROOT/scripts/build-win.sh"
@@ -45,20 +45,38 @@ BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 REMOTE_URL="$(git remote get-url origin)"
 
 mkdir -p "$ROOT/downloads"
-FILES=()
 
 echo "▸ downloads/ 폴더 갱신 중… (v$VERSION)"
 if [ -f "$WIN_ZIP" ]; then
   cp "$WIN_ZIP" "$ROOT/downloads/Graphite-Paper-Windows.zip"
-  FILES+=("Graphite-Paper-Windows.zip")
   echo "  • downloads/Graphite-Paper-Windows.zip ($(du -h "$WIN_ZIP" | awk '{print $1}'))"
 fi
 
 if [ -n "$MAC_DMG" ]; then
+  echo "▸ macOS 디스크 이미지 서명 검증 중…"
+  VERIFY_MOUNT="$(mktemp -d "${TMPDIR:-/tmp}/graphite-paper-dmg.XXXXXX")"
+  cleanup_mount() {
+    hdiutil detach "$VERIFY_MOUNT" >/dev/null 2>&1 || true
+    rmdir "$VERIFY_MOUNT" 2>/dev/null || true
+  }
+  trap cleanup_mount EXIT
+  hdiutil attach "$MAC_DMG" -readonly -nobrowse -mountpoint "$VERIFY_MOUNT" >/dev/null
+  VERIFY_APP="$VERIFY_MOUNT/Graphite Paper.app"
+  [ -d "$VERIFY_APP" ] || { echo "✗ DMG 안에서 Graphite Paper.app을 찾지 못했어요."; exit 1; }
+  test "$(lipo -archs "$VERIFY_APP/Contents/MacOS/graphite-paper")" = "arm64"
+  codesign --verify --deep --strict "$VERIFY_APP"
+  cleanup_mount
+  trap - EXIT
+  echo "  • codesign --verify --deep --strict 통과"
+
   cp "$MAC_DMG" "$ROOT/downloads/Graphite-Paper-macOS.dmg"
-  FILES+=("Graphite-Paper-macOS.dmg")
   echo "  • downloads/Graphite-Paper-macOS.dmg ($(du -h "$MAC_DMG" | awk '{print $1}'))"
 fi
+
+CHECKSUM_FILES=()
+for name in "Graphite-Paper-Windows.zip" "Graphite-Paper-macOS.dmg"; do
+  [ -f "$ROOT/downloads/$name" ] && CHECKSUM_FILES+=("$name")
+done
 
 (
   cd "$ROOT/downloads"
@@ -66,7 +84,7 @@ fi
     echo "Graphite Paper v$VERSION"
     echo "Built: $BUILD_DATE"
     echo ""
-    shasum -a 256 "${FILES[@]}"
+    shasum -a 256 "${CHECKSUM_FILES[@]}"
   } > CHECKSUMS.txt
 )
 
@@ -87,6 +105,6 @@ git push origin "$BRANCH"
 
 REPO_HTTPS="$(echo "$REMOTE_URL" | sed -E 's#^git@github\.com:#https://github.com/#; s#\.git$##')"
 echo "✓ 업로드 완료!"
-for f in "${FILES[@]}"; do
+for f in "${CHECKSUM_FILES[@]}"; do
   echo "  $REPO_HTTPS/raw/$BRANCH/downloads/$f"
 done

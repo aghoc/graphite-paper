@@ -16,7 +16,7 @@ LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchSe
 
 cd "$ROOT"
 echo "▸ 빌드 중…"
-npx tauri build --bundles app
+APPLE_SIGNING_IDENTITY="${APPLE_SIGNING_IDENTITY:--}" npx tauri build --bundles app
 
 [ -d "$BUILT" ] || { echo "✗ 빌드 결과를 찾지 못했어요: $BUILT"; exit 1; }
 
@@ -29,6 +29,7 @@ ditto "$BUILT" "$NEW"
 mv "$NEW" "$DEST"
 rm -rf "$OLD"
 
+codesign --verify --deep --strict "$DEST"
 "$LSREGISTER" -f "$DEST" >/dev/null 2>&1 || true
 
 VERSION=$(plutil -extract CFBundleShortVersionString raw -o - "$DEST/Contents/Info.plist")
